@@ -1,0 +1,217 @@
+import string
+from collections import deque
+
+class Error(Exception):
+  """Base class for other exceptions"""
+  pass
+
+class InvalidIdentifier(Error):
+  """Raised when the identifier  variable is invalid"""
+  pass
+
+class UnknownVariable(Error):
+  """Raised when the variable in input isn't in saved_elems (hadn't been saved)"""
+  pass
+
+class InvalidAssignment(Error):
+  """Raised when assignment(value) is invalid"""
+  pass
+
+class InvalidExpression(Error):
+  """Raised when expression isn't correct"""
+  pass
+
+saved_elems = {}
+stack = deque()
+postfix_result = []
+
+def value_precedence(elem):
+  if str(elem) in "*/":
+    return 1
+  elif str(elem) in "+-":
+    return 0
+  raise InvalidExpression()
+
+def transform(str_):
+  for x in "+-()*/":
+    str_ = str_.replace(x, " " + x + " ")
+  return str_.split()
+
+def remove_operators(list_):
+  l = list_
+  while True:
+    count = {"+": 0, "-": 0, "*": 0, "/": 0}
+    for x in l:
+      if "+" in x:
+        if count["+"] > 0:
+          l = transform("".join(l).replace("++", "+"))
+          break
+        count["+"] += 1
+        for i in "-*/":
+          count[i] = 0
+      elif "-" in x:
+        if count["-"] > 0:
+          l = transform("".join(l).replace("--", "+"))
+          break
+        count["-"] += 1
+        for i in "+*/":
+          count[i] = 0
+      elif "*" in x:
+        if count["*"] > 0:
+          raise InvalidExpression
+        count["*"] += 1
+        for i in "-+/":
+          count[i] = 0
+      elif "/" in x:
+        if count["/"] > 0:
+          raise InvalidExpression()
+        count["/"] += 1
+        for i in "-*+":
+          count[i] = 0
+      else:
+        for i in "+-*/":
+          count[i] = 0
+    else:
+      if "+-" in "".join(l):
+        raise InvalidExpression()
+      return l
+
+def represents_int(s):
+    try: 
+      int(s)
+      return True
+    except ValueError:
+      return False
+
+def is_valid(variable):
+  return not any(x in (string.digits + string.punctuation) for x in variable)
+
+def command_check(command):
+  if command == "/exit":
+    print("Bye!")
+    return 0
+  elif command == "/help":
+    print_info()
+    return 1
+  else:
+    print("Unknown command")
+    return 1
+  
+def print_info():
+    print("The program is a simple calculator where you can add and subtract infinite number of integers")
+    return
+
+def to_postfix(input_):
+ 
+  for x in input_:
+    if represents_int(x) or x in saved_elems:
+      if represents_int(x):
+        postfix_result.append(x)
+      else:
+        postfix_result.append(str(saved_elems[x]))
+    else:
+      if len(stack) == 0 or stack[-1] == "(":
+        stack.append(x)
+      elif x == "(":
+        stack.append(x)
+      elif x == ")":
+        while stack[-1] != "(":
+          postfix_result.append(stack.pop())
+        stack.pop()
+      elif value_precedence(x) > value_precedence(stack[-1]):
+        stack.append(x)
+      elif value_precedence(x) <= value_precedence(stack[-1]):
+        while len(stack) > 0 and stack[-1] != "(":
+          postfix_result.append(stack.pop())
+        stack.append(x)
+  while len(stack) != 0:
+    postfix_result.append(stack.pop())
+  return postfix_result
+
+def operation(a, b, sign):
+  if sign == "+":
+    return a + b
+  elif sign == "-":
+    return a - b
+  elif sign == "*":
+    return a * b
+  elif sign == "/":
+    return a // b
+
+def calculation(postfix):  # На вход подается список элементов в порядке postfix
+  for x in postfix:
+    if represents_int(x):
+      stack.append(int(x))
+    elif x in saved_elems:
+      stack.append(saved_elems[x])
+    elif x in "+-*/":
+      b = stack.pop()
+      a = stack.pop()
+      stack.append(operation(a, b, x))
+  return stack.pop()
+
+
+def main():
+  while True:
+    try:
+      user_input = input()
+      if user_input.startswith("/"):
+        if command_check(user_input) == 0:
+          return
+        else:
+          continue
+      elif user_input == "":
+          continue
+
+      elif "=" in user_input:
+        variable, value = [i.strip() for i in user_input.replace("=", " ").split()]
+        if represents_int(value):
+          if is_valid(variable):
+            saved_elems[variable] = int(value)
+            continue
+          else:
+            raise InvalidIdentifier()
+        else:
+          if is_valid(value):
+            if value in saved_elems:
+              saved_elems[variable] = saved_elems[value]
+              continue
+            else:
+              raise UnknownVariable()
+          else:
+            raise InvalidAssignment()
+      else:
+        if user_input.startswith("-") and represents_int(user_input[1:].split()[0]):
+          user_input = "0" + user_input
+        user_input = remove_operators(transform(user_input))
+        postfix = to_postfix(user_input)  # Список
+        if ("(" in user_input or ")" in user_input) and ((user_input.count("(")+ user_input.count(")")) % 2 != 0):
+          raise InvalidExpression
+        else:  # Расшифровываем postfix (считаем)
+          print(calculation(postfix))
+          postfix_result.clear()
+          stack.clear()
+          continue
+    except InvalidIdentifier:
+      print("Invalid identifier")
+      postfix_result.clear()
+      stack.clear()      
+      continue
+    except UnknownVariable:
+      print("Unknown variable")
+      postfix_result.clear()
+      stack.clear()          
+      continue
+    except InvalidAssignment:
+      print("Invalid assignment")
+      postfix_result.clear()
+      stack.clear()       
+      continue
+    except Exception:  # раньше тут было InvalidExpression вместо Exception
+      print("Invalid expression")
+      postfix_result.clear()
+      stack.clear()       
+      continue
+  return
+
+main()
